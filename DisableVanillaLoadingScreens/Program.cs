@@ -1,0 +1,196 @@
+using System;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Synthesis;
+using Mutagen.Bethesda.Skyrim;
+using System.Threading.Tasks;
+using Mutagen.Bethesda.Synthesis.Settings;
+using System.Collections.Generic;
+using Mutagen.Bethesda.Plugins;
+using System.Linq;
+
+namespace DisableVanillaLoadingScreens {
+    public enum Mode {
+        DisableAll,
+        DisableVanilla,
+        Smart
+    }
+    public class Settings {
+        [SynthesisTooltip("Decides which loading screens are disabled.\nDisable All: Disables all loading screens in your load order.\nDisable Vanilla: Disables all loading screens from official plugins and the unofficial patch.\nSmart: Disables loading screens from all mods that are not loading screen mods. A mod is considered a loading screen mod, if at least 60% of its content are loading screens.")]
+        public Mode mode = Mode.Smart;
+
+        public const double SmartThreshold = 0.6;
+        public const double SmartSkipHeuristic = 0.1;
+        public const int SmartMinLoadingScreens = 5;
+        public const int SmartFreeOtherRecords = 5;
+    }
+    public class Program {
+        public static Lazy<Settings> _settings = null!;
+        public static Settings settings => _settings.Value;
+
+        public static HashSet<ModKey> disableLoadScreens = new();
+
+        public static HashSet<string> vanillaModNames = new() {
+            // base game
+            "Skyrim.esm",
+            "Update.esm",
+            "Dawnguard.esm",
+            "HearthFires.esm",
+            "Dragonborn.esm",
+
+            // unofficial patch
+            "Unofficial Skyrim Special Edition Patch.esp",
+
+            // creation club
+            "ccASVSSE001-ALMSIVI.esm",
+            "ccBGSSSE001-Fish.esm",
+            "ccBGSSSE002-ExoticArrows.esl",
+            "ccBGSSSE003-Zombies.esl",
+            "ccBGSSSE004-RuinsEdge.esl",
+            "ccBGSSSE005-Goldbrand.esl",
+            "ccBGSSSE006-StendarsHammer.esl",
+            "ccBGSSSE007-Chrysamere.esl",
+            "ccBGSSSE010-PetDwarvenArmoredMudcrab.esl",
+            "ccBGSSSE011-HrsArmrElvn.esl",
+            "ccBGSSSE012-HrsArmrStl.esl",
+            "ccBGSSSE014-SpellPack01.esl",
+            "ccBGSSSE019-StaffofSheogorath.esl",
+            "ccBGSSSE020-GrayCowl.esl",
+            "ccBGSSSE021-LordsMail.esl",
+            "ccMTYSSE001-KnightsoftheNine.esl",
+            "ccQDRSSE001-SurvivalMode.esl",
+            "ccTWBSSE001-PuzzleDungeon.esm",
+            "ccEEJSSE001-Hstead.esm",
+            "ccQDRSSE002-Firewood.esl",
+            "ccBGSSSE018-Shadowrend.esl",
+            "ccBGSSSE035-PetNHound.esl",
+            "ccFSVSSE001-Backpacks.esl",
+            "ccEEJSSE002-Tower.esl",
+            "ccEDHSSE001-NorJewel.esl",
+            "ccVSVSSE002-Pets.esl",
+            "ccBGSSSE037-Curios.esl",
+            "ccBGSSSE034-MntUni.esl",
+            "ccBGSSSE045-Hasedoki.esl",
+            "ccBGSSSE008-Wraithguard.esl",
+            "ccBGSSSE036-PetBWolf.esl",
+            "ccFFBSSE001-ImperialDragon.esl",
+            "ccMTYSSE002-VE.esl",
+            "ccBGSSSE043-CrossElv.esl",
+            "ccVSVSSE001-Winter.esl",
+            "ccEEJSSE003-Hollow.esl",
+            "ccBGSSSE016-Umbra.esm",
+            "ccBGSSSE031-AdvCyrus.esm",
+            "ccBGSSSE038-BowofShadows.esl",
+            "ccBGSSSE040-AdvObGobs.esl",
+            "ccBGSSSE050-BA_Daedric.esl",
+            "ccBGSSSE052-BA_Iron.esl",
+            "ccBGSSSE054-BA_Orcish.esl",
+            "ccBGSSSE058-BA_Steel.esl",
+            "ccBGSSSE059-BA_Dragonplate.esl",
+            "ccBGSSSE061-BA_Dwarven.esl",
+            "ccPEWSSE002-ArmsOfChaos.esl",
+            "ccBGSSSE041-NetchLeather.esl",
+            "ccEDHSSE002-SplKntSet.esl",
+            "ccBGSSSE064-BA_Elven.esl",
+            "ccBGSSSE063-BA_Ebony.esl",
+            "ccBGSSSE062-BA_DwarvenMail.esl",
+            "ccBGSSSE060-BA_Dragonscale.esl",
+            "ccBGSSSE056-BA_Silver.esl",
+            "ccBGSSSE055-BA_OrcishScaled.esl",
+            "ccBGSSSE053-BA_Leather.esl",
+            "ccBGSSSE051-BA_DaedricMail.esl",
+            "ccBGSSSE057-BA_Stalhrim.esl",
+            "ccBGSSSE066-Staves.esl",
+            "ccBGSSSE067-DaedInv.esm",
+            "ccBGSSSE068-Bloodfall.esl",
+            "ccBGSSSE069-Contest.esl",
+            "ccVSVSSE003-NecroArts.esl",
+            "ccVSVSSE004-BeAFarmer.esl",
+            "ccBGSSSE025-AdvDSGS.esm",
+            "ccFFBSSE002-CrossbowPack.esl",
+            "ccBGSSSE013-Dawnfang.esl",
+            "ccRMSSSE001-NecroHouse.esl",
+            "ccEDHSSE003-Redguard.esl",
+            "ccEEJSSE004-Hall.esl",
+            "ccEEJSSE005-Cave.esm",
+            "ccKRTSSE001_Altar.esl",
+            "ccCBHSSE001-Gaunt.esl",
+            "ccAFDSSE001-DweSanctuary.esm"
+        };
+
+        public static async Task<int> Main(string[] args) {
+            return await SynthesisPipeline.Instance
+                .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch)
+                .SetAutogeneratedSettings(
+                    nickname: "Settings",
+                    path: "settings.json",
+                    out _settings)
+                .SetTypicalOpen(GameRelease.SkyrimSE, "RemoveVanillaLoadingScreens.esp")
+                .Run(args);
+        }
+
+        public static double CalcRatio(int numLoadScreenMasters, int numStaticMastersUsedAsLoadingScreens, int numLoadScreenOverrides, int numRecords) {
+            double adjustedNumRecords = numRecords - numLoadScreenOverrides - numStaticMastersUsedAsLoadingScreens;
+            adjustedNumRecords = Math.Max(1, adjustedNumRecords - Settings.SmartFreeOtherRecords);
+            return numLoadScreenMasters / adjustedNumRecords;
+        }
+
+        public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) {
+            foreach(var modListing in state.LoadOrder) {
+                switch(settings.mode) {
+                    case Mode.DisableAll:
+                        disableLoadScreens.Add(modListing.Key);
+                        break;
+                    case Mode.DisableVanilla:
+                        if(vanillaModNames.Contains(modListing.Key.Name)) {
+                            disableLoadScreens.Add(modListing.Key);
+                        }
+                        break;
+                    case Mode.Smart:
+                        var mod = modListing.Value.Mod;
+                        if(mod != null && mod.LoadScreens.Count > 0) {
+                            var loadScreenMasters = mod.LoadScreens.Where((ILoadScreenGetter screen) => {
+                                return screen.FormKey.ModKey == mod.ModKey;
+                            }).ToArray();
+                            var staticMasters = mod.Statics.Where((IStaticGetter screen) => {
+                                return screen.FormKey.ModKey == mod.ModKey;
+                            }).Select((staticGetter) => staticGetter.FormKey).ToHashSet();
+                            int numStaticMastersUsedAsLoadingScreens = 0;
+                            foreach(var screen in loadScreenMasters) {
+                                if(staticMasters.Contains(screen.LoadingScreenNif.FormKey)) {
+                                    numStaticMastersUsedAsLoadingScreens += 1;
+                                    staticMasters.Remove(screen.LoadingScreenNif.FormKey);
+                                }
+                            }
+                            var numLoadScreenMasters = loadScreenMasters.Length;
+                            int numLoadScreenOverrides = mod.LoadScreens.Count - numLoadScreenMasters;
+
+                            var ratio = CalcRatio(numLoadScreenMasters, numStaticMastersUsedAsLoadingScreens, numLoadScreenOverrides, (int)mod.ModHeader.Stats.NumRecords);
+                            if(ratio > Settings.SmartSkipHeuristic) {
+                                ratio = CalcRatio(numLoadScreenMasters, numStaticMastersUsedAsLoadingScreens, numLoadScreenOverrides, mod.EnumerateMajorRecords().Count());
+                            }
+
+                            if(ratio <= Settings.SmartThreshold || numLoadScreenMasters < Settings.SmartMinLoadingScreens) {
+                                disableLoadScreens.Add(modListing.Key);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            foreach(var screenGetter in state.LoadOrder.PriorityOrder.LoadScreen().WinningOverrides()) {
+                if(disableLoadScreens.Contains(screenGetter.FormKey.ModKey)) {
+                    var screen = state.PatchMod.LoadScreens.GetOrAddAsOverride(screenGetter);
+                    screen.Conditions.Clear();
+                    screen.Conditions.Add(new ConditionFloat() {
+                        ComparisonValue = -1,
+                        CompareOperator = CompareOperator.EqualTo,
+                        Data = new FunctionConditionData() {
+                            Function = Condition.Function.GetRandomPercent
+                        }
+                    });
+                }
+            }
+        }
+    }
+}

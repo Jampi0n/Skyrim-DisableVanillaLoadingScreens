@@ -10,12 +10,12 @@ using System.Linq;
 
 namespace DisableVanillaLoadingScreens {
     public enum Mode {
-        DisableAll,
-        DisableVanilla,
+        All,
+        Vanilla,
         Smart
     }
     public class Settings {
-        [SynthesisTooltip("Decides which loading screens are disabled.\nDisable All: Disables all loading screens in your load order.\nDisable Vanilla: Disables all loading screens from official plugins and the unofficial patch.\nSmart: Disables loading screens from all mods that are not loading screen mods. A mod is considered a loading screen mod, if at least 60% of its content are loading screens.")]
+        [SynthesisTooltip("Decides which loading screens are disabled.\nAll: Disables all loading screens in your load order.\nVanilla: Disables all loading screens from official plugins and the unofficial patch.\nSmart: Disables loading screens from all mods that are not loading screen mods. A mod is considered a loading screen mod, if at least 60% of its content are loading screens.")]
         public Mode mode = Mode.Smart;
 
         public const double SmartThreshold = 0.6;
@@ -137,10 +137,10 @@ namespace DisableVanillaLoadingScreens {
         public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) {
             foreach(var modListing in state.LoadOrder) {
                 switch(settings.mode) {
-                    case Mode.DisableAll:
+                    case Mode.All:
                         disableLoadScreens.Add(modListing.Key);
                         break;
-                    case Mode.DisableVanilla:
+                    case Mode.Vanilla:
                         if(vanillaModNames.Contains(modListing.Key.Name)) {
                             disableLoadScreens.Add(modListing.Key);
                         }
